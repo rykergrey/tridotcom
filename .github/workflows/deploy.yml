@@ -1,23 +1,30 @@
 permissions:
   contents: write
-
-
 name: Deploy to GitHub Pages
-
 on:
   push:
     branches: [ "main" ]
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - name: Debug information
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          echo "Checking for API key placeholder:"
+          grep "YOUR_API_KEY_HERE" index.html || echo "Placeholder not found"
+          echo "API key length: ${#API_KEY}"
       - name: Replace API key
         env:
           API_KEY: ${{ secrets.API_KEY }}
         run: |
           sed -i 's/YOUR_API_KEY_HERE/'"$API_KEY"'/g' index.html
+      - name: Verify replacement
+        run: |
+          echo "Checking if placeholder still exists:"
+          grep "YOUR_API_KEY_HERE" index.html && echo "Replacement failed" || echo "Placeholder replaced"
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
