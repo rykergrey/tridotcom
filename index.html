@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Ryker Initiative</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            height: 100%;
+            width: 100%;
+            overflow: hidden;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #000;
+            color: #0f0;
+        }
+        #playerContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #player {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .overlay {
+            position: absolute;
+            left: 0;
+            right: 0;
+            background-color: rgb(0, 15, 0);
+            color: #0f0;
+            display: flex;
+            align-items: center;
+            z-index: 1000;
+            padding: 10px;
+            box-shadow: 0 0 10px #0f0;
+        }
+        #topOverlay {
+            top: 0;
+            justify-content: flex-start;
+            height: 60px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #bottomOverlay {
+            bottom: 0;
+            justify-content: center;
+            height: 60px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-align: center;
+            font-size: 12px;
+        }
+        #diceButton, #initializeButton {
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgb(0, 255, 0);
+            color: #000;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        #diceButton {
+            bottom: 100px;
+            width: 60px;
+            height: 60px;
+            z-index: 999;
+            opacity: 0;
+            pointer-events: none;
+            background-color: transparent;
+            padding: 0;
+        }
+        #diceButton svg {
+            width: 100%;
+            height: 100%;
+        }
+        #diceButton:hover {
+            transform: translateX(-50%) scale(1.1);
+        }
+        @keyframes rollDice {
+            0% { transform: translateX(-50%) rotate(0deg); }
+            100% { transform: translateX(-50%) rotate(360deg); }
+        }
+        #diceButton.rolling {
+            animation: rollDice 0.5s ease-out;
+        }
+        #initializeButton {
+            display: none;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2001;
+            padding: 10px 20px;
+        }
+        #initializeButton:hover {
+            background-color: rgb(0, 200, 0);
+        }
+        #initialOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        #loadingIndicator {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #0f0;
+            border-top: 3px solid #000;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #debugOverlay {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 300px;
+            height: 200px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            overflow-y: auto;
+            z-index: 2000;
+            display: none;
+        }
+        
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            #topOverlay {
+                font-size: 14px;
+            }
+            #bottomOverlay {
+                font-size: 10px;
+            }
+            #initializeButton {
+                font-size: 14px;
+                padding: 8px 16px;
+            }
+            #diceButton {
+                width: 50px;
+                height: 50px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="playerContainer">
+        <div id="player"></div>
+        <div id="topOverlay" class="overlay"></div>
+        <div id="bottomOverlay" class="overlay">This content has not been approved by the Terrestrial Reconnaissance and Intervention Force</div>
+        <button id="diceButton">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 6C3 4.34315 4.34315 3 6 3H18C19.6569 3 21 4.34315 21 6V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V6Z" stroke="#00FF00" stroke-width="2"/>
+                <circle cx="7.5" cy="7.5" r="1.5" fill="#00FF00"/>
+                <circle cx="12" cy="12" r="1.5" fill="#00FF00"/>
+                <circle cx="16.5" cy="16.5" r="1.5" fill="#00FF00"/>
+                <circle cx="16.5" cy="7.5" r="1.5" fill="#00FF00"/>
+                <circle cx="7.5" cy="16.5" r="1.5" fill="#00FF00"/>
+            </svg>
+        </button>
+        <div id="initialOverlay">
+            <div id="loadingIndicator"></div>
+            <button id="initializeButton">Initialize</button>
+        </div>
+        <div id="debugOverlay"></div>
+    </div>
+
+    <script>
+        const DEBUG_MODE = false; // Set to true to enable debugging
+        const apiKey = 'AIzaSyCXjBRYdPjPFVf-8u5j2ViIBaUtfGkZT0I';
+        const playlistId = 'PLyMpk4vjBC2eVzRvwpBaoaYTgzpuhppu0';
+        let player;
+        let playerReady = false;
+        let overlayTimer;
+        let isInitialized = false;
+        let recentVideos = [];
+        let allVideos = [];
+
+        function debugLog(message) {
+            if (!DEBUG_MODE) return;
+            console.log(message);
+            const debugOverlay = $('#debugOverlay');
+            debugOverlay.append(message + '<br>');
+            debugOverlay.scrollTop(debugOverlay[0].scrollHeight);
+        }
+
+        function onYouTubeIframeAPIReady() {
+            debugLog('YouTube API Ready');
+            player = new YT.Player('player', {
+                height: '100%',
+                width: '100%',
+                playerVars: {
+                    autoplay: 0,
+                    controls: 1,
+                    showinfo: 0,
+                    rel: 0,
+                    modestbranding: 1,
+                    iv_load_policy: 3
+                },
+                events: {
+                    'onReady': onPlayerReady,
+                    'onError': onPlayerError
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+            debugLog('YouTube player is ready');
+            playerReady = true;
+            loadAllVideos();
+        }
+
+        function onPlayerError(event) {
+            debugLog('Player error: ' + event.data);
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function getRandomVideo(videos) {
+            debugLog(`Total videos: ${videos.length}, Recent videos: ${recentVideos.length}`);
+            const availableVideos = videos.filter(video => !recentVideos.includes(video.snippet.resourceId.videoId));
+            debugLog(`Available videos: ${availableVideos.length}`);
+            if (availableVideos.length === 0) {
+                recentVideos = [];
+                debugLog('Resetting recent videos');
+                return videos[Math.floor(Math.random() * videos.length)];
+            }
+            const selectedVideo = availableVideos[Math.floor(Math.random() * availableVideos.length)];
+            recentVideos.push(selectedVideo.snippet.resourceId.videoId);
+            if (recentVideos.length > Math.min(10, Math.floor(videos.length / 2))) {
+                recentVideos.shift();
+            }
+            debugLog(`Selected video: ${selectedVideo.snippet.title}`);
+            return selectedVideo;
+        }
+
+        function getRandomStartTime(duration) {
+            const minStart = Math.floor(duration * 0.1);
+            const maxStart = Math.floor(duration * 0.9);
+            return minStart + Math.floor(Math.random() * (maxStart - minStart));
+        }
+
+        function loadAllVideos(pageToken = '') {
+            debugLog('Loading videos from playlist...');
+            $.get(`https://www.googleapis.com/youtube/v3/playlistItems`, {
+                part: 'snippet',
+                maxResults: 50,
+                playlistId: playlistId,
+                key: apiKey,
+                pageToken: pageToken
+            }, function(data) {
+                allVideos = allVideos.concat(data.items);
+                debugLog(`Loaded ${allVideos.length} videos so far`);
+                if (data.nextPageToken) {
+                    loadAllVideos(data.nextPageToken);
+                } else {
+                    debugLog(`Finished loading all ${allVideos.length} videos`);
+                    allVideos = shuffleArray(allVideos);
+                    $('#loadingIndicator').hide();
+                    $('#initializeButton').show();
+                }
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                debugLog(`Error loading videos: ${textStatus}, ${errorThrown}`);
+                $('#loadingIndicator').hide();
+                $('#initializeButton').text('Error occurred, click to retry').show();
+            });
+        }
+
+        function loadRandomVideo(autoplay = true) {
+            if (allVideos.length === 0) {
+                debugLog('No videos available. Reloading playlist...');
+                loadAllVideos();
+                return;
+            }
+
+            const selectedVideo = getRandomVideo(allVideos);
+            const videoId = selectedVideo.snippet.resourceId.videoId;
+            const videoTitle = selectedVideo.snippet.title;
+
+            debugLog(`Loading video: ${videoTitle}`);
+
+            $.get(`https://www.googleapis.com/youtube/v3/videos`, {
+                part: 'contentDetails',
+                id: videoId,
+                key: apiKey
+            }, function(videoData) {
+                const duration = videoData.items[0].contentDetails.duration;
+                const seconds = parseISO8601Duration(duration);
+                const startTime = getRandomStartTime(seconds);
+
+                debugLog(`Video duration: ${seconds}s, Start time: ${startTime}s`);
+
+                player.loadVideoById({
+                    videoId: videoId,
+                    startSeconds: startTime
+                });
+                
+                if (autoplay) {
+                    player.playVideo();
+                }
+                
+                $('#topOverlay').text(videoTitle);
+                if (isInitialized) {
+                    showOverlays();
+                } else {
+                    $('.overlay').show();
+                }
+            }).fail(function(jqXHR, textStatus, errorThrown) {
+                debugLog(`Error loading video details: ${textStatus}, ${errorThrown}`);
+            });
+        }
+
+        function showOverlays() {
+            clearTimeout(overlayTimer);
+            $('.overlay').stop().show();
+            overlayTimer = setTimeout(() => {
+                $('.overlay').fadeOut(500);
+            }, 5000);
+        }
+
+        function parseISO8601Duration(duration) {
+            const match = duration.match(/PT(\d+H)?(\d+M)?(\d+S)?/);
+            const hours = (parseInt(match[1]) || 0);
+            const minutes = (parseInt(match[2]) || 0);
+            const seconds = (parseInt(match[3]) || 0);
+            return hours * 3600 + minutes * 60 + seconds;
+        }
+
+        function initializePlayer() {
+            isInitialized = true;
+            $('#initialOverlay').fadeOut(500);
+            if (DEBUG_MODE) {
+                $('#debugOverlay').show();
+            }
+            loadRandomVideo(true);
+            showOverlays();
+            
+            setTimeout(() => {
+                $('#diceButton').css({opacity: 1, pointerEvents: 'auto'}).fadeIn(1000);
+            }, 5000);
+        }
+
+        $('#diceButton').click(function() {
+            $(this).addClass('rolling');
+            setTimeout(() => {
+                $(this).removeClass('rolling');
+            }, 500);
+            loadRandomVideo(true);
+        });
+
+        $('#initializeButton').click(initializePlayer);
+
+        $(document).ready(function() {
+            if (playerReady) {
+                loadAllVideos();
+            }
+        });
+
+        function resizePlayer() {
+            const width = $(window).width();
+            const height = $(window).height();
+            $('#player, #playerContainer').css({
+                'width': width + 'px',
+                'height': height + 'px'
+            });
+        }
+
+        $(window).on('resize', resizePlayer);
+        resizePlayer();
+    </script>
+</body>
+</html>
